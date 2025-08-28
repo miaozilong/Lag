@@ -6,24 +6,9 @@
 
 #define g_data CDataManager::Instance()
 
-#define Lag_COLOR_HIGH RGB(128, 194, 105)   //电池电量颜色——高
-#define Lag_COLOR_LOW RGB(241, 197, 0)      //电池电量颜色——低
-#define Lag_COLOR_CRITICAL RGB(206, 23, 0)  //电池电量颜色——电量不足
-
-//电量显示样式
-enum class LagType
-{
-    NUMBER,             //仅数字
-    ICON,               //仅图标
-    NUMBER_BESIDE_ICON  //数字显示在图标旁边
-};
-
 struct SettingData
 {
-    LagType Lag_type{};
     bool show_Lag_in_tooltip{};
-    bool show_percent{};
-    bool show_charging_animation{};     //显示充电动画
 };
 
 class CDataManager
@@ -43,11 +28,6 @@ public:
     float DPIF(float pixel);
     int RDPI(int pixel);
     HICON GetIcon(UINT id);
-    bool IsAcOnline() const;        //电源是否已接通
-    bool IsCharging() const;        //是否正在充电
-
-    std::wstring GetLagString() const;
-    COLORREF GetLagColor() const;
 
     // 网络延迟
     void RefreshLatency();
@@ -56,7 +36,6 @@ public:
     std::wstring GetLatencyTooltipText() const;
 
     SettingData m_setting_data;
-    SYSTEM_POWER_STATUS m_sysPowerStatus{};   // 系统电量信息
     ULONG_PTR m_gdiplusToken;
 
 private:

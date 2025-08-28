@@ -44,14 +44,7 @@ BOOL COptionsDlg::OnInitDialog()
     CDialog::OnInitDialog();
 
     // TODO:  在此添加额外的初始化
-    m_Lag_type_combo.AddString(g_data.StringRes(IDS_BATTYER_TYPE_NUMBER));
-    m_Lag_type_combo.AddString(g_data.StringRes(IDS_BATTYER_TYPE_ICON));
-    m_Lag_type_combo.AddString(g_data.StringRes(IDS_BATTYER_TYPE_NUMBER_BESIDE_ICON));
-    m_Lag_type_combo.SetCurSel(static_cast<int>(m_data.Lag_type));
-
     CheckDlgButton(IDC_SHOW_TOOLTIPS_CHECK, m_data.show_Lag_in_tooltip);
-    CheckDlgButton(IDC_SHOW_PERCENT_CHECK, m_data.show_percent);
-    CheckDlgButton(IDC_SHOW_CHARGING_ANIMATION_CHECK, m_data.show_charging_animation);
 
     return TRUE;  // return TRUE unless you set the focus to a control
                   // 异常: OCX 属性页应返回 FALSE
@@ -60,7 +53,7 @@ BOOL COptionsDlg::OnInitDialog()
 
 void COptionsDlg::OnCbnSelchangeCombo1()
 {
-    m_data.Lag_type = static_cast<LagType>(m_Lag_type_combo.GetCurSel());
+    // removed battery type
 }
 
 
@@ -72,18 +65,18 @@ void COptionsDlg::OnBnClickedShowTooltipsCheck()
 
 void COptionsDlg::OnBnClickedShowPercentCheck()
 {
-    m_data.show_percent = (IsDlgButtonChecked(IDC_SHOW_PERCENT_CHECK) != 0);
+    // removed percent option
 }
 
 
 void COptionsDlg::OnBnClickedShowChargingAnimationCheck()
 {
-    m_data.show_charging_animation = (IsDlgButtonChecked(IDC_SHOW_CHARGING_ANIMATION_CHECK) != 0);
+    // removed charging animation option
 }
 
 
 void COptionsDlg::OnNMClickHelpSyslink(NMHDR* pNMHDR, LRESULT* pResult)
 {
-    ShellExecute(NULL, _T("open"), _T("https://github.com/zhongyang219/TrafficMonitorPlugins/wiki/%E7%94%B5%E6%B1%A0%E6%8F%92%E4%BB%B6"), NULL, NULL, SW_SHOW);
+    ShellExecute(NULL, _T("open"), _T("https://github.com/zhongyang219/TrafficMonitorPlugins/wiki/"), NULL, NULL, SW_SHOW);
     *pResult = 0;
 }

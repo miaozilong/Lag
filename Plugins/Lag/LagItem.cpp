@@ -45,10 +45,7 @@ const wchar_t* CLagItem::GetItemValueText() const
 
 const wchar_t* CLagItem::GetItemValueSampleText() const
 {
-    if (g_data.m_setting_data.show_percent)
-        return L"100%";
-    else
-        return L"100";
+    return L"000ms";
 }
 
 bool CLagItem::IsCustomDraw() const

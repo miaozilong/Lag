@@ -55,20 +55,14 @@ void CDataManager::LoadConfig(const std::wstring& config_dir)
         m_config_path = config_dir + module_file_name;
     }
     m_config_path += L".ini";
-    m_setting_data.Lag_type = static_cast<LagType>(GetPrivateProfileInt(L"config", L"Lag_type", static_cast<int>(LagType::NUMBER_BESIDE_ICON), m_config_path.c_str()));
     m_setting_data.show_Lag_in_tooltip = (GetPrivateProfileInt(L"config", L"show_Lag_in_tooltip", 1, m_config_path.c_str()) != 0);
-    m_setting_data.show_percent = (GetPrivateProfileInt(L"config", L"show_percent", 1, m_config_path.c_str()) != 0);
-    m_setting_data.show_charging_animation = (GetPrivateProfileInt(L"config", L"show_charging_animation", 0, m_config_path.c_str()) != 0);
 }
 
 void CDataManager::SaveConfig() const
 {
     if (!m_config_path.empty())
     {
-        WritePrivateProfileInt(L"config", L"Lag_type", static_cast<int>(m_setting_data.Lag_type), m_config_path.c_str());
         WritePrivateProfileInt(L"config", L"show_Lag_in_tooltip", m_setting_data.show_Lag_in_tooltip, m_config_path.c_str());
-        WritePrivateProfileInt(L"config", L"show_percent", m_setting_data.show_percent, m_config_path.c_str());
-        WritePrivateProfileInt(L"config", L"show_charging_animation", m_setting_data.show_charging_animation, m_config_path.c_str());
     }
 }
 
@@ -126,44 +120,7 @@ HICON CDataManager::GetIcon(UINT id)
 }
 
 
-bool CDataManager::IsAcOnline() const
-{
-    return m_sysPowerStatus.ACLineStatus == 1;
-}
-
-bool CDataManager::IsCharging() const
-{
-    return m_sysPowerStatus.BatteryFlag == 8;
-}
-
-std::wstring CDataManager::GetLagString() const
-{
-    if (m_sysPowerStatus.BatteryFlag == 128)
-    {
-        return L"N/A";
-    }
-    else
-    {
-        std::wstring str = std::to_wstring(m_sysPowerStatus.BatteryLifePercent);
-        if (m_setting_data.show_percent)
-        {
-            if (m_sysPowerStatus.BatteryLifePercent < 100)
-                str.push_back(L' ');
-            str.push_back(L'%');
-        }
-        return str;
-    }
-}
-
-COLORREF CDataManager::GetLagColor() const
-{
-    if (m_sysPowerStatus.BatteryLifePercent < 20)
-        return Lag_COLOR_CRITICAL;
-    else if (m_sysPowerStatus.BatteryLifePercent < 60)
-        return Lag_COLOR_LOW;
-    else
-        return Lag_COLOR_HIGH;
-}
+// removed battery-related code
 
 static DWORD64 GetTickMs()
 {
