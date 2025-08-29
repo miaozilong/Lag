@@ -31,14 +31,28 @@ const wchar_t* CLagItem::GetItemLableText() const
 const wchar_t* CLagItem::GetItemValueText() const
 {
     static std::wstring text;
+    static int last_ms = -1;                     // 上次成功的最低延迟（四舍五入后的整数毫秒）
+    static ULONGLONG last_ok_tick = 0;           // 上次成功时间
+    const ULONGLONG fallback_window_ms = 500;    // 回退窗口：500毫秒
     // 使用最近一次测量结果，不强制刷新
     double v = g_data.GetMinLatencyMs();
-    if (v < 0)
-        text = L"N/A";
-    else
+    if (v >= 0)
     {
         int ms = static_cast<int>(v + 0.5);
-        text = std::to_wstring(ms) + L"ms";
+        last_ms = ms;
+        last_ok_tick = GetTickCount64();
+        text = std::to_wstring(last_ms) + L"ms";
+    }
+    else
+    {
+        if (last_ms >= 0 && last_ok_tick != 0 && GetTickCount64() - last_ok_tick <= fallback_window_ms)
+        {
+            text = std::to_wstring(last_ms) + L"ms";
+        }
+        else
+        {
+            text = L"N/A";
+        }
     }
     return text.c_str();
 }
