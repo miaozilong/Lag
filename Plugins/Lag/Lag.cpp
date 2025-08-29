@@ -46,6 +46,9 @@ void CLag::DataRequired()
 
 ITMPlugin::OptionReturn CLag::ShowOptionsDialog(void* hParent)
 {
+    return ITMPlugin::OR_OPTION_UNCHANGED;
+    // 以下代码不会被执行
+    /*
     AFX_MANAGE_STATE(AfxGetStaticModuleState());
     CWnd* pParent = CWnd::FromHandle((HWND)hParent);
     COptionsDlg dlg(pParent);
@@ -57,6 +60,7 @@ ITMPlugin::OptionReturn CLag::ShowOptionsDialog(void* hParent)
         return ITMPlugin::OR_OPTION_CHANGED;
     }
     return ITMPlugin::OR_OPTION_UNCHANGED;
+    */
 }
 
 const wchar_t* CLag::GetInfo(PluginInfoIndex index)
