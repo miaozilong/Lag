@@ -76,7 +76,7 @@ const CString& CDataManager::StringRes(UINT id)
     else
     {
         AFX_MANAGE_STATE(AfxGetStaticModuleState());
-        //m_string_table[id].LoadString(id);
+        m_string_table[id].LoadString(id);
         return m_string_table[id];
     }
 }

@@ -151,19 +151,19 @@ END
 
 // Icon with lowest ID value placed first to ensure application icon
 // remains consistent on all systems.
-IDI_Lag_DARK        ICON                    "res\\Lag_dark.ico"
-
-IDI_Lag_LIGHT       ICON                    "res\\Lag_light.ico"
-
-IDI_Lag_DARK_CHARGE ICON                    "res\\Lag_dark_charge.ico"
-
-IDI_Lag_LIGHT_CHARGE ICON                    "res\\Lag_light_charge.ico"
-
-IDI_FILL_HIGH           ICON                    "res\\fill_high.ico"
-
-IDI_FILL_LOW            ICON                    "res\\fill_low.ico"
-
-IDI_FILL_CRITICAL       ICON                    "res\\fill_critical.ico"
+//IDI_Lag_DARK        ICON                    "res\\Lag_dark.ico"
+//
+//IDI_Lag_LIGHT       ICON                    "res\\Lag_light.ico"
+//
+//IDI_Lag_DARK_CHARGE ICON                    "res\\Lag_dark_charge.ico"
+//
+//IDI_Lag_LIGHT_CHARGE ICON                    "res\\Lag_light_charge.ico"
+//
+//IDI_FILL_HIGH           ICON                    "res\\fill_high.ico"
+//
+//IDI_FILL_LOW            ICON                    "res\\fill_low.ico"
+//
+//IDI_FILL_CRITICAL       ICON                    "res\\fill_critical.ico"
 
 
 /////////////////////////////////////////////////////////////////////////////
@@ -173,13 +173,13 @@ IDI_FILL_CRITICAL       ICON                    "res\\fill_critical.ico"
 
 STRINGTABLE
 BEGIN
-    IDS_PLUGIN_NAME         "电池电量插件"
-    IDS_PLUGIN_DESCRIPTION  "用于TrafficMonitor的电池电量插件。"
-    IDS_Lag             "电池电量"
-    IDS_BATTYER_TYPE_NUMBER "仅数字"
-    IDS_BATTYER_TYPE_ICON   "仅图标"
-    IDS_BATTYER_TYPE_NUMBER_IN_ICON "数字显示在图标内"
-    IDS_BATTYER_TYPE_NUMBER_BESIDE_ICON "数字显示在图标旁边"
+    IDS_PLUGIN_NAME         "延迟插件"
+    IDS_PLUGIN_DESCRIPTION  "用于TrafficMonitor的延迟插件。"
+    IDS_Lag             "延迟"
+    IDS_Lag_TYPE_NUMBER "仅数字"
+    IDS_Lag_TYPE_ICON   "仅图标"
+    IDS_Lag_TYPE_NUMBER_IN_ICON "数字显示在图标内"
+    IDS_Lag_TYPE_NUMBER_BESIDE_ICON "数字显示在图标旁边"
     IDS_CHARGING            "电源已接通"
     IDS_Lag_LIFE_TIME   "电池可用"
 END
@@ -266,10 +266,10 @@ BEGIN
     IDS_PLUGIN_NAME         "Lag plug-in"
     IDS_PLUGIN_DESCRIPTION  "Lag plug-in for TrafficMonitor."
     IDS_Lag             "Lag"
-    IDS_BATTYER_TYPE_NUMBER "Number only"
-    IDS_BATTYER_TYPE_ICON   "Icon only"
-    IDS_BATTYER_TYPE_NUMBER_IN_ICON "Number in the icon"
-    IDS_BATTYER_TYPE_NUMBER_BESIDE_ICON "Number beside the icon"
+    IDS_Lag_TYPE_NUMBER "Number only"
+    IDS_Lag_TYPE_ICON   "Icon only"
+    IDS_Lag_TYPE_NUMBER_IN_ICON "Number in the icon"
+    IDS_Lag_TYPE_NUMBER_BESIDE_ICON "Number beside the icon"
     IDS_CHARGING            "AC power in online"
     IDS_Lag_LIFE_TIME   "Lag life time"
 END
