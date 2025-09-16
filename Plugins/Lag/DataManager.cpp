@@ -173,13 +173,24 @@ void CDataManager::RefreshLatency()
     if (m_latencyLastUpdateTick != 0 && now - m_latencyLastUpdateTick < 5000) return;
     m_latencyLastUpdateTick = now;
 
-    m_latencyMsPerHost.assign(m_latencyHosts.size(), -1.0);
-    for (size_t i = 0; i < m_latencyHosts.size(); ++i)
+    // 测量国内站点延迟
+    m_domesticLatencyMs.assign(m_domesticHosts.size(), -1.0);
+    for (size_t i = 0; i < m_domesticHosts.size(); ++i)
     {
-        const auto& host = m_latencyHosts[i];
+        const auto& host = m_domesticHosts[i];
         double ms = -1.0;
         if (MeasureHttpHeadLatencyMs(host, ms) && ms >= 0)
-            m_latencyMsPerHost[i] = ms;
+            m_domesticLatencyMs[i] = ms;
+    }
+
+    // 测量国际站点延迟
+    m_internationalLatencyMs.assign(m_internationalHosts.size(), -1.0);
+    for (size_t i = 0; i < m_internationalHosts.size(); ++i)
+    {
+        const auto& host = m_internationalHosts[i];
+        double ms = -1.0;
+        if (MeasureHttpHeadLatencyMs(host, ms) && ms >= 0)
+            m_internationalLatencyMs[i] = ms;
     }
 }
 
@@ -187,7 +198,11 @@ double CDataManager::GetAverageLatencyMs() const
 {
     double sum = 0.0;
     int cnt = 0;
-    for (double v : m_latencyMsPerHost)
+    for (double v : m_domesticLatencyMs)
+    {
+        if (v >= 0) { sum += v; ++cnt; }
+    }
+    for (double v : m_internationalLatencyMs)
     {
         if (v >= 0) { sum += v; ++cnt; }
     }
@@ -198,7 +213,31 @@ double CDataManager::GetAverageLatencyMs() const
 double CDataManager::GetMinLatencyMs() const
 {
     double best = -1.0;
-    for (double v : m_latencyMsPerHost)
+    for (double v : m_domesticLatencyMs)
+    {
+        if (v >= 0 && (best < 0 || v < best)) best = v;
+    }
+    for (double v : m_internationalLatencyMs)
+    {
+        if (v >= 0 && (best < 0 || v < best)) best = v;
+    }
+    return best;
+}
+
+double CDataManager::GetDomesticMinLatencyMs() const
+{
+    double best = -1.0;
+    for (double v : m_domesticLatencyMs)
+    {
+        if (v >= 0 && (best < 0 || v < best)) best = v;
+    }
+    return best;
+}
+
+double CDataManager::GetInternationalMinLatencyMs() const
+{
+    double best = -1.0;
+    for (double v : m_internationalLatencyMs)
     {
         if (v >= 0 && (best < 0 || v < best)) best = v;
     }
@@ -208,14 +247,53 @@ double CDataManager::GetMinLatencyMs() const
 std::wstring CDataManager::GetLatencyTooltipText() const
 {
     std::wstringstream ss;
-    double v = GetMinLatencyMs();
-    ss << L"最低: ";
-    if (v < 0) ss << L"N/A"; else ss << static_cast<int>(v + 0.5) << L"ms";
-    for (size_t i = 0; i < m_latencyHosts.size(); ++i)
+    
+    // 国内站点
+    ss << L"国内站点:\n";
+    for (size_t i = 0; i < m_domesticHosts.size(); ++i)
     {
-        ss << L"\n" << m_latencyHostNames[i] << L": ";
-        double ms = (i < m_latencyMsPerHost.size() ? m_latencyMsPerHost[i] : -1.0);
+        ss << m_domesticHostNames[i] << L": ";
+        double ms = (i < m_domesticLatencyMs.size() ? m_domesticLatencyMs[i] : -1.0);
         if (ms < 0) ss << L"N/A"; else ss << static_cast<int>(ms + 0.5) << L"ms";
+        if (i < m_domesticHosts.size() - 1) ss << L"\n";
     }
+    
+    ss << L"\n\n国际站点:\n";
+    for (size_t i = 0; i < m_internationalHosts.size(); ++i)
+    {
+        ss << m_internationalHostNames[i] << L": ";
+        double ms = (i < m_internationalLatencyMs.size() ? m_internationalLatencyMs[i] : -1.0);
+        if (ms < 0) ss << L"N/A"; else ss << static_cast<int>(ms + 0.5) << L"ms";
+        if (i < m_internationalHosts.size() - 1) ss << L"\n";
+    }
+    
     return ss.str();
+}
+
+std::wstring CDataManager::GetDomesticLatencyText() const
+{
+    double v = GetDomesticMinLatencyMs();
+    if (v >= 0)
+    {
+        int ms = static_cast<int>(v + 0.5);
+        return std::to_wstring(ms) + L"ms";
+    }
+    else
+    {
+        return L"N/A";
+    }
+}
+
+std::wstring CDataManager::GetInternationalLatencyText() const
+{
+    double v = GetInternationalMinLatencyMs();
+    if (v >= 0)
+    {
+        int ms = static_cast<int>(v + 0.5);
+        return std::to_wstring(ms) + L"ms";
+    }
+    else
+    {
+        return L"N/A";
+    }
 }

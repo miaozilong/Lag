@@ -1,6 +1,7 @@
 ﻿#include "pch.h"
 #include "LagItem.h"
 #include "DataManager.h"
+#include <afxwin.h>
 
 static double Lag_percent = 0.0;
 
@@ -31,17 +32,10 @@ const wchar_t* CLagItem::GetItemLableText() const
 const wchar_t* CLagItem::GetItemValueText() const
 {
     static std::wstring text;
-    // 使用最近一次测量结果，不强制刷新
-    double v = g_data.GetMinLatencyMs();
-    if (v >= 0)
-    {
-        int ms = static_cast<int>(v + 0.5);
-        text = std::to_wstring(ms) + L"ms";
-    }
-    else
-    {
-        text = L"N/A";
-    }
+    // 显示两行：国内站点和国际站点最低延迟
+    std::wstring domestic = g_data.GetDomesticLatencyText();
+    std::wstring international = g_data.GetInternationalLatencyText();
+    text = domestic + L"\n" + international;
     return text.c_str();
 }
 
@@ -52,7 +46,7 @@ const wchar_t* CLagItem::GetItemValueSampleText() const
 
 bool CLagItem::IsCustomDraw() const
 {
-    return false;
+    return true;
 }
 
 //int CLagItem::GetItemWidth() const
@@ -67,7 +61,35 @@ int CLagItem::GetItemWidthEx(void * hDC) const
     return pDC->GetTextExtent(sample).cx;
 }
 
-void CLagItem::DrawItem(void* hDC, int x, int y, int w, int h, bool)
+void CLagItem::DrawItem(void* hDC, int x, int y, int w, int h, bool dark_mode)
 {
-    // 非自绘，留空
+    CDC* pDC = CDC::FromHandle((HDC)hDC);
+    if (!pDC) return;
+
+    // 设置文本颜色
+    COLORREF textColor = dark_mode ? RGB(255, 255, 255) : RGB(0, 0, 0);
+    pDC->SetTextColor(textColor);
+    pDC->SetBkMode(TRANSPARENT);
+
+    // 获取字体信息
+    CFont* pOldFont = pDC->SelectObject(pDC->GetCurrentFont());
+    
+    // 计算文本尺寸
+    CSize textSize = pDC->GetTextExtent(L"000ms");
+    int lineHeight = textSize.cy;
+    int totalHeight = lineHeight * 2; // 两行文本
+    
+    // 计算垂直居中位置
+    int startY = y + (h - totalHeight) / 2;
+    
+    // 绘制第一行：国内站点延迟
+    std::wstring domestic = g_data.GetDomesticLatencyText();
+    pDC->TextOut(x, startY, domestic.c_str());
+    
+    // 绘制第二行：国际站点延迟
+    std::wstring international = g_data.GetInternationalLatencyText();
+    pDC->TextOut(x, startY + lineHeight, international.c_str());
+    
+    // 恢复字体
+    pDC->SelectObject(pOldFont);
 }
