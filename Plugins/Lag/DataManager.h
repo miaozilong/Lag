@@ -6,6 +6,10 @@
 #include <mutex>
 #include <atomic>
 #include <future>
+#include <queue>
+#include <condition_variable>
+#include <functional>
+#include <memory>
 #include "resource.h"
 
 #define g_data CDataManager::Instance()
@@ -13,6 +17,27 @@
 struct SettingData
 {
     bool show_Lag_in_tooltip{};
+};
+
+// 简单的线程池类
+class ThreadPool
+{
+public:
+    ThreadPool(size_t numThreads = 4);
+    ~ThreadPool();
+    
+    template<class F, class... Args>
+    auto enqueue(F&& f, Args&&... args) 
+        -> std::future<typename std::result_of<F(Args...)>::type>;
+    
+    void shutdown();
+
+private:
+    std::vector<std::thread> workers;
+    std::queue<std::function<void()>> tasks;
+    std::mutex queueMutex;
+    std::condition_variable condition;
+    std::atomic<bool> stop;
 };
 
 class CDataManager
@@ -91,4 +116,7 @@ private:
     std::atomic<bool> m_isRefreshing{ false }; // 是否正在刷新
     std::vector<std::future<double>> m_futures; // 异步任务
     static constexpr int NETWORK_TIMEOUT_MS = 3000; // 网络超时时间（毫秒）
+    
+    // 线程池
+    std::unique_ptr<ThreadPool> m_threadPool; // 线程池实例
 };
