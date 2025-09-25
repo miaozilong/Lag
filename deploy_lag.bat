@@ -14,8 +14,8 @@ echo ========================================
 
 REM 设置路径
 set "SOURCE_DLL=Bin\x64\Release\Lag.dll"
-set "TARGET_DIR=C:\Program Files\TrafficMonitor\plugins"
-set "TRAFFICMONITOR_EXE=C:\Program Files\TrafficMonitor\TrafficMonitor.exe"
+set "TARGET_DIR=C:\Users\miaozilong\AppData\Local\TrafficMonitor\plugins"
+set "TRAFFICMONITOR_EXE=C:\Users\miaozilong\AppData\Local\TrafficMonitor\TrafficMonitor.exe"
 set "VS_PATH=C:\Program Files\Microsoft Visual Studio\2022\Community"
 set "MSBUILD_PATH=%VS_PATH%\MSBuild\Current\Bin\MSBuild.exe"
 

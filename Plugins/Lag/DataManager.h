@@ -2,6 +2,10 @@
 #include <string>
 #include <map>
 #include <vector>
+#include <thread>
+#include <mutex>
+#include <atomic>
+#include <future>
 #include "resource.h"
 
 #define g_data CDataManager::Instance()
@@ -81,4 +85,10 @@ private:
     std::vector<double> m_domesticLatencyMs; // 国内站点延迟，失败为 -1
     std::vector<double> m_internationalLatencyMs; // 国际站点延迟，失败为 -1
     ULONGLONG m_latencyLastUpdateTick{ 0 };
+
+    // 多线程相关
+    mutable std::mutex m_latencyMutex; // 保护延迟数据的互斥锁
+    std::atomic<bool> m_isRefreshing{ false }; // 是否正在刷新
+    std::vector<std::future<double>> m_futures; // 异步任务
+    static constexpr int NETWORK_TIMEOUT_MS = 3000; // 网络超时时间（毫秒）
 };

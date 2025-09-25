@@ -127,14 +127,20 @@ static DWORD64 GetTickMs()
     return static_cast<DWORD64>(GetTickCount64());
 }
 
-static bool MeasureHttpHeadLatencyMs(const std::wstring& host, double& out_ms)
+// 带超时的网络延迟测量函数
+static double MeasureHttpHeadLatencyMsWithTimeout(const std::wstring& host, int timeoutMs = 3000)
 {
-    out_ms = -1.0;
     HINTERNET hSession = WinHttpOpen(L"LagPlugin/1.0", WINHTTP_ACCESS_TYPE_AUTOMATIC_PROXY, WINHTTP_NO_PROXY_NAME, WINHTTP_NO_PROXY_BYPASS, 0);
-    if (!hSession) return false;
+    if (!hSession) return -1.0;
+
+    // 设置超时
+    DWORD timeout = timeoutMs;
+    WinHttpSetTimeouts(hSession, timeout, timeout, timeout, timeout);
+
     // 先尝试 HTTPS，不行再退回 HTTP
     HINTERNET hConnect = WinHttpConnect(hSession, host.c_str(), INTERNET_DEFAULT_HTTPS_PORT, 0);
     HINTERNET hRequest = hConnect ? WinHttpOpenRequest(hConnect, L"HEAD", L"/", NULL, WINHTTP_NO_REFERER, WINHTTP_DEFAULT_ACCEPT_TYPES, WINHTTP_FLAG_SECURE) : NULL;
+    
     if (!hRequest)
     {
         if (hConnect) WinHttpCloseHandle(hConnect);
@@ -142,60 +148,102 @@ static bool MeasureHttpHeadLatencyMs(const std::wstring& host, double& out_ms)
         if (!hConnect)
         {
             WinHttpCloseHandle(hSession);
-            return false;
+            return -1.0;
         }
         hRequest = WinHttpOpenRequest(hConnect, L"HEAD", L"/", NULL, WINHTTP_NO_REFERER, WINHTTP_DEFAULT_ACCEPT_TYPES, 0);
         if (!hRequest)
         {
             WinHttpCloseHandle(hConnect);
             WinHttpCloseHandle(hSession);
-            return false;
+            return -1.0;
         }
     }
+
     DWORD64 t0 = GetTickMs();
     BOOL ok = WinHttpSendRequest(hRequest, WINHTTP_NO_ADDITIONAL_HEADERS, 0, WINHTTP_NO_REQUEST_DATA, 0, 0, 0);
     if (ok) ok = WinHttpReceiveResponse(hRequest, NULL);
     DWORD64 t1 = GetTickMs();
+    
+    double result = -1.0;
     if (ok)
     {
-        out_ms = static_cast<double>(t1 - t0);
+        result = static_cast<double>(t1 - t0);
     }
+    
     WinHttpCloseHandle(hRequest);
     WinHttpCloseHandle(hConnect);
     WinHttpCloseHandle(hSession);
-    return ok == TRUE;
+    return result;
 }
 
 void CDataManager::RefreshLatency()
 {
+    // 智能节流：如果正在刷新，直接返回
+    if (m_isRefreshing.load()) return;
+    
     // 简单节流：5秒内不重复测量
     DWORD64 now = GetTickMs();
     if (m_latencyLastUpdateTick != 0 && now - m_latencyLastUpdateTick < 5000) return;
+    
+    m_isRefreshing.store(true);
     m_latencyLastUpdateTick = now;
 
-    // 测量国内站点延迟
-    m_domesticLatencyMs.assign(m_domesticHosts.size(), -1.0);
-    for (size_t i = 0; i < m_domesticHosts.size(); ++i)
-    {
-        const auto& host = m_domesticHosts[i];
-        double ms = -1.0;
-        if (MeasureHttpHeadLatencyMs(host, ms) && ms >= 0)
-            m_domesticLatencyMs[i] = ms;
-    }
-
-    // 测量国际站点延迟
-    m_internationalLatencyMs.assign(m_internationalHosts.size(), -1.0);
-    for (size_t i = 0; i < m_internationalHosts.size(); ++i)
-    {
-        const auto& host = m_internationalHosts[i];
-        double ms = -1.0;
-        if (MeasureHttpHeadLatencyMs(host, ms) && ms >= 0)
-            m_internationalLatencyMs[i] = ms;
-    }
+    // 启动异步任务进行网络延迟测量
+    std::thread([this]() {
+        // 创建异步任务列表
+        std::vector<std::future<double>> futures;
+        
+        // 为国内站点创建异步任务
+        for (const auto& host : m_domesticHosts)
+        {
+            futures.push_back(std::async(std::launch::async, [host]() {
+                return MeasureHttpHeadLatencyMsWithTimeout(host, NETWORK_TIMEOUT_MS);
+            }));
+        }
+        
+        // 为国际站点创建异步任务
+        for (const auto& host : m_internationalHosts)
+        {
+            futures.push_back(std::async(std::launch::async, [host]() {
+                return MeasureHttpHeadLatencyMsWithTimeout(host, NETWORK_TIMEOUT_MS);
+            }));
+        }
+        
+        // 收集所有结果（这里会等待网络请求完成，但在子线程中）
+        std::vector<double> domesticResults;
+        std::vector<double> internationalResults;
+        
+        for (size_t i = 0; i < m_domesticHosts.size(); ++i)
+        {
+            double result = futures[i].get();
+            domesticResults.push_back(result);
+        }
+        
+        for (size_t i = 0; i < m_internationalHosts.size(); ++i)
+        {
+            double result = futures[m_domesticHosts.size() + i].get();
+            internationalResults.push_back(result);
+        }
+        
+        // 快速更新数据（短暂锁定）
+        {
+            std::lock_guard<std::mutex> lock(m_latencyMutex);
+            m_domesticLatencyMs = std::move(domesticResults);
+            m_internationalLatencyMs = std::move(internationalResults);
+        }
+        
+        m_isRefreshing.store(false);
+    }).detach();
 }
 
 double CDataManager::GetAverageLatencyMs() const
 {
+    // 使用try_lock避免阻塞主线程
+    std::unique_lock<std::mutex> lock(m_latencyMutex, std::try_to_lock);
+    if (!lock.owns_lock()) {
+        return -1.0; // 如果无法获取锁，返回-1
+    }
+    
     double sum = 0.0;
     int cnt = 0;
     for (double v : m_domesticLatencyMs)
@@ -212,6 +260,12 @@ double CDataManager::GetAverageLatencyMs() const
 
 double CDataManager::GetMinLatencyMs() const
 {
+    // 使用try_lock避免阻塞主线程
+    std::unique_lock<std::mutex> lock(m_latencyMutex, std::try_to_lock);
+    if (!lock.owns_lock()) {
+        return -1.0; // 如果无法获取锁，返回-1
+    }
+    
     double best = -1.0;
     for (double v : m_domesticLatencyMs)
     {
@@ -226,6 +280,12 @@ double CDataManager::GetMinLatencyMs() const
 
 double CDataManager::GetDomesticMinLatencyMs() const
 {
+    // 使用try_lock避免阻塞主线程
+    std::unique_lock<std::mutex> lock(m_latencyMutex, std::try_to_lock);
+    if (!lock.owns_lock()) {
+        return -1.0; // 如果无法获取锁，返回-1
+    }
+    
     double best = -1.0;
     for (double v : m_domesticLatencyMs)
     {
@@ -236,6 +296,12 @@ double CDataManager::GetDomesticMinLatencyMs() const
 
 double CDataManager::GetInternationalMinLatencyMs() const
 {
+    // 使用try_lock避免阻塞主线程
+    std::unique_lock<std::mutex> lock(m_latencyMutex, std::try_to_lock);
+    if (!lock.owns_lock()) {
+        return -1.0; // 如果无法获取锁，返回-1
+    }
+    
     double best = -1.0;
     for (double v : m_internationalLatencyMs)
     {
@@ -246,6 +312,12 @@ double CDataManager::GetInternationalMinLatencyMs() const
 
 std::wstring CDataManager::GetLatencyTooltipText() const
 {
+    // 使用try_lock避免阻塞主线程
+    std::unique_lock<std::mutex> lock(m_latencyMutex, std::try_to_lock);
+    if (!lock.owns_lock()) {
+        return L"正在更新..."; // 如果无法获取锁，返回提示信息
+    }
+    
     std::wstringstream ss;
     
     // 国内站点
