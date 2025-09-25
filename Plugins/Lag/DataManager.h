@@ -95,14 +95,14 @@ private:
     };
     std::vector<std::wstring> m_internationalHosts{
         L"www.google.com",     // Google
-        L"www.github.com",     // GitHub
+        L"www.instagram.com",  // Instagram
         L"www.youtube.com",    // YouTube
         L"www.twitter.com",    // Twitter
         L"www.bbc.com"         // BBC
     };
     std::vector<std::wstring> m_internationalHostNames{
         L"Google",
-        L"GitHub",
+        L"Instagram",
         L"YouTube",
         L"Twitter",
         L"BBC"

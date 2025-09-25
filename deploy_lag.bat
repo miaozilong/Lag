@@ -143,4 +143,3 @@ echo - Lag.dll has been deployed to: %TARGET_DIR%
 echo - TrafficMonitor has been restarted
 echo - Backup of old DLL saved as: Lag.dll.backup
 echo.
-pause

@@ -245,9 +245,9 @@ void CDataManager::RefreshLatency()
     // 智能节流：如果正在刷新，直接返回
     if (m_isRefreshing.load()) return;
     
-    // 简单节流：5秒内不重复测量
+    // 简单节流：3秒内不重复测量
     DWORD64 now = GetTickMs();
-    if (m_latencyLastUpdateTick != 0 && now - m_latencyLastUpdateTick < 5000) return;
+    if (m_latencyLastUpdateTick != 0 && now - m_latencyLastUpdateTick < 3000) return;
     
     m_isRefreshing.store(true);
     m_latencyLastUpdateTick = now;

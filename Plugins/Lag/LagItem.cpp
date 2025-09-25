@@ -7,8 +7,8 @@ static double Lag_percent = 0.0;
 
 CLagItem::CLagItem()
 {
-    // 定时刷新延迟数据（10秒一次，减少网络请求频率）
-    SetTimer(NULL, 0, 10000, [](HWND, UINT, UINT_PTR, DWORD)
+    // 定时刷新延迟数据（5秒一次）
+    SetTimer(NULL, 0, 5000, [](HWND, UINT, UINT_PTR, DWORD)
         {
             g_data.RefreshLatency();
         });
