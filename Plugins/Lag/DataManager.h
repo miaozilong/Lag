@@ -21,7 +21,6 @@
 namespace LatencyConfig
 {
     constexpr int NETWORK_TIMEOUT_MS = 3000;        // 网络超时时间（毫秒）
-    constexpr ULONGLONG REFRESH_INTERVAL_MS = 3000; // 刷新间隔（毫秒）
     constexpr size_t THREAD_POOL_SIZE = 8;          // 线程池大小（国内5个 + 国际3个 = 8个站点）
 }
 
@@ -170,7 +169,6 @@ private:
     // ========================================================================
     std::vector<double> m_domesticLatencyMs;        // 国内站点延迟（ms），失败为 -1
     std::vector<double> m_internationalLatencyMs;   // 国际站点延迟（ms），失败为 -1
-    ULONGLONG m_latencyLastUpdateTick{ 0 };         // 最后更新时间戳
 
     // ========================================================================
     // 线程同步相关

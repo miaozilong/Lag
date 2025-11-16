@@ -282,63 +282,72 @@ static double MeasureHttpHeadLatencyMsWithTimeout(CDataManager* dataManager, con
 
 void CDataManager::RefreshLatency()
 {
-    // 智能节流：如果正在刷新，直接返回
+    // 如果正在刷新，直接返回（防止重复刷新，但不限制时间间隔）
     if (m_isRefreshing.load()) return;
     
-    // 节流：防止频繁刷新
-    DWORD64 now = GetTickMs();
-    if (m_latencyLastUpdateTick != 0 && now - m_latencyLastUpdateTick < LatencyConfig::REFRESH_INTERVAL_MS) return;
-    
     m_isRefreshing.store(true);
-    m_latencyLastUpdateTick = now;
 
     // 使用线程池进行网络延迟测量
     std::thread([this]() {
-        // 创建异步任务列表
-        std::vector<std::future<double>> futures;
-        
-        // 为国内站点创建线程池任务
-        for (const auto& hostInfo : m_domesticHosts)
+        // 使用 RAII 确保 m_isRefreshing 总是被重置
+        struct RefreshingGuard
         {
-            futures.push_back(m_threadPool->enqueue([this, hostInfo]() {
-                return MeasureHttpHeadLatencyMsWithTimeout(this, hostInfo.host, LatencyConfig::NETWORK_TIMEOUT_MS);
-            }));
-        }
+            std::atomic<bool>* flag;
+            RefreshingGuard(std::atomic<bool>* f) : flag(f) {}
+            ~RefreshingGuard() { flag->store(false); }
+        } guard(&m_isRefreshing);
         
-        // 为国际站点创建线程池任务
-        for (const auto& hostInfo : m_internationalHosts)
+        try
         {
-            futures.push_back(m_threadPool->enqueue([this, hostInfo]() {
-                return MeasureHttpHeadLatencyMsWithTimeout(this, hostInfo.host, LatencyConfig::NETWORK_TIMEOUT_MS);
-            }));
+            // 创建异步任务列表
+            std::vector<std::future<double>> futures;
+            
+            // 为国内站点创建线程池任务
+            for (const auto& hostInfo : m_domesticHosts)
+            {
+                futures.push_back(m_threadPool->enqueue([this, hostInfo]() {
+                    return MeasureHttpHeadLatencyMsWithTimeout(this, hostInfo.host, LatencyConfig::NETWORK_TIMEOUT_MS);
+                }));
+            }
+            
+            // 为国际站点创建线程池任务
+            for (const auto& hostInfo : m_internationalHosts)
+            {
+                futures.push_back(m_threadPool->enqueue([this, hostInfo]() {
+                    return MeasureHttpHeadLatencyMsWithTimeout(this, hostInfo.host, LatencyConfig::NETWORK_TIMEOUT_MS);
+                }));
+            }
+            
+            // 收集所有结果（这里会等待网络请求完成，但在子线程中）
+            std::vector<double> domesticResults;
+            std::vector<double> internationalResults;
+            
+            // 收集国内站点结果
+            for (size_t i = 0; i < m_domesticHosts.size(); ++i)
+            {
+                double result = futures[i].get();
+                domesticResults.push_back(result);
+            }
+            
+            // 收集国际站点结果
+            for (size_t i = 0; i < m_internationalHosts.size(); ++i)
+            {
+                double result = futures[m_domesticHosts.size() + i].get();
+                internationalResults.push_back(result);
+            }
+            
+            // 快速更新数据（短暂锁定）
+            {
+                std::lock_guard<std::mutex> lock(m_latencyMutex);
+                m_domesticLatencyMs = std::move(domesticResults);
+                m_internationalLatencyMs = std::move(internationalResults);
+            }
         }
-        
-        // 收集所有结果（这里会等待网络请求完成，但在子线程中）
-        std::vector<double> domesticResults;
-        std::vector<double> internationalResults;
-        
-        // 收集国内站点结果
-        for (size_t i = 0; i < m_domesticHosts.size(); ++i)
+        catch (...)
         {
-            double result = futures[i].get();
-            domesticResults.push_back(result);
+            // 发生异常时，确保数据不被破坏，保持原有数据不变
+            // m_isRefreshing 会由 guard 自动重置
         }
-        
-        // 收集国际站点结果
-        for (size_t i = 0; i < m_internationalHosts.size(); ++i)
-        {
-            double result = futures[m_domesticHosts.size() + i].get();
-            internationalResults.push_back(result);
-        }
-        
-        // 快速更新数据（短暂锁定）
-        {
-            std::lock_guard<std::mutex> lock(m_latencyMutex);
-            m_domesticLatencyMs = std::move(domesticResults);
-            m_internationalLatencyMs = std::move(internationalResults);
-        }
-        
-        m_isRefreshing.store(false);
     }).detach();
 }
 
