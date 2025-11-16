@@ -129,17 +129,13 @@ private:
     };
     std::vector<std::wstring> m_internationalHosts{
         L"www.google.com",     // Google
-        L"www.instagram.com",  // Instagram
         L"www.youtube.com",    // YouTube
-        L"www.twitter.com",    // Twitter
-        L"www.bbc.com"         // BBC
+        L"x.com"               // X (Twitter)
     };
     std::vector<std::wstring> m_internationalHostNames{
         L"Google",
-        L"Instagram",
         L"YouTube",
-        L"Twitter",
-        L"BBC"
+        L"X"
     };
     std::vector<double> m_domesticLatencyMs; // 国内站点延迟，失败为 -1
     std::vector<double> m_internationalLatencyMs; // 国际站点延迟，失败为 -1
