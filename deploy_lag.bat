@@ -16,8 +16,23 @@ REM 设置路径
 set "SOURCE_DLL=Bin\x64\Release\Lag.dll"
 set "TARGET_DIR=C:\Users\miaozilong\AppData\Local\TrafficMonitor\plugins"
 set "TRAFFICMONITOR_EXE=C:\Users\miaozilong\AppData\Local\TrafficMonitor\TrafficMonitor.exe"
-set "VS_PATH=C:\Program Files\Microsoft Visual Studio\2022\Community"
-set "MSBUILD_PATH=%VS_PATH%\MSBuild\Current\Bin\MSBuild.exe"
+
+REM 自动检测 MSBuild 路径（优先使用 vswhere）
+echo Detecting MSBuild path...
+if exist "%ProgramFiles(x86)%\Microsoft Visual Studio\Installer\vswhere.exe" (
+    for /f "delims=" %%i in ('"%ProgramFiles(x86)%\Microsoft Visual Studio\Installer\vswhere.exe" -latest -requires Microsoft.Component.MSBuild -find MSBuild\**\Bin\MSBuild.exe 2^>nul') do set "MSBUILD_PATH=%%i"
+)
+
+REM 如果 vswhere 未找到，尝试常见路径
+if not defined MSBUILD_PATH (
+    if exist "C:\Program Files\Microsoft Visual Studio\18\Community\MSBuild\Current\Bin\MSBuild.exe" (
+        set "MSBUILD_PATH=C:\Program Files\Microsoft Visual Studio\18\Community\MSBuild\Current\Bin\MSBuild.exe"
+    ) else if exist "C:\Program Files\Microsoft Visual Studio\2026\Community\MSBuild\Current\Bin\MSBuild.exe" (
+        set "MSBUILD_PATH=C:\Program Files\Microsoft Visual Studio\2026\Community\MSBuild\Current\Bin\MSBuild.exe"
+    ) else if exist "C:\Program Files\Microsoft Visual Studio\2022\Community\MSBuild\Current\Bin\MSBuild.exe" (
+        set "MSBUILD_PATH=C:\Program Files\Microsoft Visual Studio\2022\Community\MSBuild\Current\Bin\MSBuild.exe"
+    )
+)
 
 echo Step 1: Cleaning Bin directory...
 if exist "Bin" (
@@ -32,14 +47,21 @@ echo.
 echo Step 2: Building Lag.dll...
 
 REM 检查MSBuild是否存在
-if not exist "%MSBUILD_PATH%" (
-    echo Error: MSBuild not found at %MSBUILD_PATH%
-    echo Please install Visual Studio 2022
+if not defined MSBUILD_PATH (
+    echo Error: MSBuild not found
+    echo Please install Visual Studio with MSBuild component
     pause
     exit /b 1
 )
 
-echo Using MSBuild from Visual Studio 2022...
+if not exist "%MSBUILD_PATH%" (
+    echo Error: MSBuild not found at %MSBUILD_PATH%
+    echo Please install Visual Studio with MSBuild component
+    pause
+    exit /b 1
+)
+
+echo Using MSBuild from: %MSBUILD_PATH%
 echo Current directory: %CD%
 echo Solution file: %~dp0TrafficMonitorPlugins.sln
 
