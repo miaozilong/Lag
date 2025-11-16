@@ -89,6 +89,7 @@ CDataManager::CDataManager()
 CDataManager::~CDataManager()
 {
     SaveConfig();
+    CloseAllConnections();
 }
 
 CDataManager& CDataManager::Instance()
@@ -191,37 +192,63 @@ static DWORD64 GetTickMs()
     return static_cast<DWORD64>(GetTickCount64());
 }
 
-// 带超时的网络延迟测量函数
-static double MeasureHttpHeadLatencyMsWithTimeout(const std::wstring& host, int timeoutMs = 3000)
+// 带超时的网络延迟测量函数（使用持久连接）
+static double MeasureHttpHeadLatencyMsWithTimeout(CDataManager* dataManager, const std::wstring& host, int timeoutMs = 3000)
 {
-    HINTERNET hSession = WinHttpOpen(L"LagPlugin/1.0", WINHTTP_ACCESS_TYPE_AUTOMATIC_PROXY, WINHTTP_NO_PROXY_NAME, WINHTTP_NO_PROXY_BYPASS, 0);
-    if (!hSession) return -1.0;
-
-    // 设置超时
-    DWORD timeout = timeoutMs;
-    WinHttpSetTimeouts(hSession, timeout, timeout, timeout, timeout);
-
-    // 先尝试 HTTPS，不行再退回 HTTP
-    HINTERNET hConnect = WinHttpConnect(hSession, host.c_str(), INTERNET_DEFAULT_HTTPS_PORT, 0);
-    HINTERNET hRequest = hConnect ? WinHttpOpenRequest(hConnect, L"HEAD", L"/", NULL, WINHTTP_NO_REFERER, WINHTTP_DEFAULT_ACCEPT_TYPES, WINHTTP_FLAG_SECURE) : NULL;
-    
-    if (!hRequest)
+    // 获取或创建持久连接
+    CDataManager::PersistentConnection* conn = dataManager->GetOrCreateConnection(host);
+    if (!conn || !conn->isValid)
     {
-        if (hConnect) WinHttpCloseHandle(hConnect);
-        hConnect = WinHttpConnect(hSession, host.c_str(), INTERNET_DEFAULT_HTTP_PORT, 0);
-        if (!hConnect)
+        // 如果连接无效，尝试重新创建一次
+        conn = dataManager->GetOrCreateConnection(host);
+        if (!conn || !conn->isValid)
         {
-            WinHttpCloseHandle(hSession);
-            return -1.0;
-        }
-        hRequest = WinHttpOpenRequest(hConnect, L"HEAD", L"/", NULL, WINHTTP_NO_REFERER, WINHTTP_DEFAULT_ACCEPT_TYPES, 0);
-        if (!hRequest)
-        {
-            WinHttpCloseHandle(hConnect);
-            WinHttpCloseHandle(hSession);
             return -1.0;
         }
     }
+
+    // 创建请求（每次测量都创建新请求，但重用连接）
+    HINTERNET hRequest = WinHttpOpenRequest(
+        conn->hConnect, 
+        L"HEAD", 
+        L"/", 
+        NULL, 
+        WINHTTP_NO_REFERER, 
+        WINHTTP_DEFAULT_ACCEPT_TYPES, 
+        conn->useHttps ? WINHTTP_FLAG_SECURE : 0
+    );
+    
+    if (!hRequest)
+    {
+        // 如果请求创建失败，可能是连接已断开，标记为无效并尝试重新创建
+        conn->isValid = false;
+        conn = dataManager->GetOrCreateConnection(host);
+        if (!conn || !conn->isValid)
+        {
+            return -1.0;
+        }
+        
+        // 重试创建请求
+        hRequest = WinHttpOpenRequest(
+            conn->hConnect, 
+            L"HEAD", 
+            L"/", 
+            NULL, 
+            WINHTTP_NO_REFERER, 
+            WINHTTP_DEFAULT_ACCEPT_TYPES, 
+            conn->useHttps ? WINHTTP_FLAG_SECURE : 0
+        );
+        
+        if (!hRequest)
+        {
+            conn->isValid = false;
+            return -1.0;
+        }
+    }
+
+    // 设置请求超时
+    DWORD timeout = timeoutMs;
+    WinHttpSetTimeouts(hRequest, timeout, timeout, timeout, timeout);
 
     DWORD64 t0 = GetTickMs();
     BOOL ok = WinHttpSendRequest(hRequest, WINHTTP_NO_ADDITIONAL_HEADERS, 0, WINHTTP_NO_REQUEST_DATA, 0, 0, 0);
@@ -232,11 +259,16 @@ static double MeasureHttpHeadLatencyMsWithTimeout(const std::wstring& host, int 
     if (ok)
     {
         result = static_cast<double>(t1 - t0);
+        conn->lastUsedTick = GetTickMs();
+    }
+    else
+    {
+        // 如果请求失败，可能是连接已断开，标记为无效
+        // 下次调用时会自动重新创建连接
+        conn->isValid = false;
     }
     
     WinHttpCloseHandle(hRequest);
-    WinHttpCloseHandle(hConnect);
-    WinHttpCloseHandle(hSession);
     return result;
 }
 
@@ -260,16 +292,16 @@ void CDataManager::RefreshLatency()
         // 为国内站点创建线程池任务
         for (const auto& host : m_domesticHosts)
         {
-            futures.push_back(m_threadPool->enqueue([host]() {
-                return MeasureHttpHeadLatencyMsWithTimeout(host, NETWORK_TIMEOUT_MS);
+            futures.push_back(m_threadPool->enqueue([this, host]() {
+                return MeasureHttpHeadLatencyMsWithTimeout(this, host, NETWORK_TIMEOUT_MS);
             }));
         }
         
         // 为国际站点创建线程池任务
         for (const auto& host : m_internationalHosts)
         {
-            futures.push_back(m_threadPool->enqueue([host]() {
-                return MeasureHttpHeadLatencyMsWithTimeout(host, NETWORK_TIMEOUT_MS);
+            futures.push_back(m_threadPool->enqueue([this, host]() {
+                return MeasureHttpHeadLatencyMsWithTimeout(this, host, NETWORK_TIMEOUT_MS);
             }));
         }
         
@@ -432,4 +464,97 @@ std::wstring CDataManager::GetInternationalLatencyText() const
     {
         return L"N/A";
     }
+}
+
+// 连接管理方法实现
+CDataManager::PersistentConnection* CDataManager::GetOrCreateConnection(const std::wstring& host)
+{
+    std::lock_guard<std::mutex> lock(m_connectionMutex);
+    
+    // 查找现有连接
+    auto it = m_connections.find(host);
+    if (it != m_connections.end() && it->second)
+    {
+        PersistentConnection* conn = it->second.get();
+        
+        // 检查连接是否仍然有效
+        if (conn->isValid && IsConnectionValid(conn))
+        {
+            return conn;
+        }
+        else
+        {
+            // 连接无效，从 map 中移除（会自动关闭连接）
+            m_connections.erase(it);
+        }
+    }
+    
+    // 创建新连接
+    auto conn = std::make_unique<PersistentConnection>();
+    
+    // 创建会话
+    conn->hSession = WinHttpOpen(L"LagPlugin/1.0", WINHTTP_ACCESS_TYPE_AUTOMATIC_PROXY, WINHTTP_NO_PROXY_NAME, WINHTTP_NO_PROXY_BYPASS, 0);
+    if (!conn->hSession)
+    {
+        return nullptr;
+    }
+    
+    // 设置超时
+    DWORD timeout = NETWORK_TIMEOUT_MS;
+    WinHttpSetTimeouts(conn->hSession, timeout, timeout, timeout, timeout);
+    
+    // 先尝试 HTTPS
+    conn->hConnect = WinHttpConnect(conn->hSession, host.c_str(), INTERNET_DEFAULT_HTTPS_PORT, 0);
+    if (conn->hConnect)
+    {
+        conn->useHttps = true;
+        conn->isValid = true;
+        conn->lastUsedTick = GetTickMs();
+        
+        // 存储连接
+        PersistentConnection* result = conn.get();
+        m_connections[host] = std::move(conn);
+        return result;
+    }
+    
+    // HTTPS 失败，尝试 HTTP
+    conn->hConnect = WinHttpConnect(conn->hSession, host.c_str(), INTERNET_DEFAULT_HTTP_PORT, 0);
+    if (conn->hConnect)
+    {
+        conn->useHttps = false;
+        conn->isValid = true;
+        conn->lastUsedTick = GetTickMs();
+        
+        // 存储连接
+        PersistentConnection* result = conn.get();
+        m_connections[host] = std::move(conn);
+        return result;
+    }
+    
+    // 都失败了，清理并返回 nullptr
+    WinHttpCloseHandle(conn->hSession);
+    return nullptr;
+}
+
+bool CDataManager::IsConnectionValid(PersistentConnection* conn) const
+{
+    if (!conn || !conn->hSession || !conn->hConnect)
+    {
+        return false;
+    }
+    
+    // 尝试创建一个测试请求来检查连接是否仍然有效
+    // 如果连接已断开，WinHttpOpenRequest 可能会失败
+    // 但为了不消耗资源，我们只做基本检查
+    // 实际的有效性检查在 MeasureHttpHeadLatencyMsWithTimeout 中进行
+    
+    // 检查句柄是否仍然有效（简单检查）
+    // WinHTTP 没有直接的方法检查连接状态，所以我们依赖实际使用时的错误检测
+    return true;
+}
+
+void CDataManager::CloseAllConnections()
+{
+    std::lock_guard<std::mutex> lock(m_connectionMutex);
+    m_connections.clear(); // unique_ptr 会自动调用析构函数，关闭所有连接
 }

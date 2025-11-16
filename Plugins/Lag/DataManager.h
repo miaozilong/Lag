@@ -10,6 +10,7 @@
 #include <condition_variable>
 #include <functional>
 #include <memory>
+#include <winhttp.h>
 #include "resource.h"
 
 #define g_data CDataManager::Instance()
@@ -71,6 +72,39 @@ public:
     SettingData m_setting_data;
     ULONG_PTR m_gdiplusToken;
 
+    // 持久连接管理（需要被静态函数访问）
+    struct PersistentConnection
+    {
+        HINTERNET hSession{ nullptr };
+        HINTERNET hConnect{ nullptr };
+        bool useHttps{ true };
+        DWORD64 lastUsedTick{ 0 };
+        bool isValid{ false };
+        
+        ~PersistentConnection()
+        {
+            Close();
+        }
+        
+        void Close()
+        {
+            if (hConnect)
+            {
+                WinHttpCloseHandle(hConnect);
+                hConnect = nullptr;
+            }
+            if (hSession)
+            {
+                WinHttpCloseHandle(hSession);
+                hSession = nullptr;
+            }
+            isValid = false;
+        }
+    };
+    
+    PersistentConnection* GetOrCreateConnection(const std::wstring& host);
+    bool IsConnectionValid(PersistentConnection* conn) const;
+
 private:
     static CDataManager m_instance;
     std::wstring m_config_path;
@@ -119,4 +153,9 @@ private:
     
     // 线程池
     std::unique_ptr<ThreadPool> m_threadPool; // 线程池实例
+    
+    mutable std::mutex m_connectionMutex; // 保护连接池的互斥锁
+    std::map<std::wstring, std::unique_ptr<PersistentConnection>> m_connections; // 每个host的持久连接
+    
+    void CloseAllConnections();
 };
