@@ -3,8 +3,6 @@
 #include "DataManager.h"
 #include <afxwin.h>
 
-static double Lag_percent = 0.0;
-
 CLagItem::CLagItem()
 {
     // 定时刷新延迟数据（5秒一次）

@@ -82,8 +82,8 @@ CDataManager::CDataManager()
     Gdiplus::GdiplusStartupInput gdiplusStartupInput;
     GdiplusStartup(&m_gdiplusToken, &gdiplusStartupInput, NULL);
     
-    //初始化线程池（4个工作线程）
-    m_threadPool = std::make_unique<ThreadPool>(4);
+    //初始化线程池
+    m_threadPool = std::make_unique<ThreadPool>(LatencyConfig::THREAD_POOL_SIZE);
 }
 
 CDataManager::~CDataManager()
